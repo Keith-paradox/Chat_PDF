@@ -13,6 +13,9 @@ class VectorStore:
         self.collection = collection
 
     def similarity_search(self, embedding, k=5):
+        # Ensure embedding is a plain Python list for Chroma
+        if hasattr(embedding, "tolist"):
+            embedding = embedding.tolist()
         results = self.collection.query(
             query_embeddings=[embedding],
             n_results=k,
