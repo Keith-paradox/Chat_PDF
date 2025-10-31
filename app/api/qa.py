@@ -55,7 +55,11 @@ async def ask_endpoint(request: AskRequest):
         answer = ""
         for step in plan:
             if step["action"] == "RETRIEVE":
-                retrieved_chunks = retriever.retrieve(request.question, k=step.get("args", {}).get("k", 5))
+                retrieved_chunks = retriever.retrieve(
+                    request.question,
+                    k=step.get("args", {}).get("k", 5),
+                    history=session_memory.history(),
+                )
                 sources = [c["metadata"]["source"] for c in retrieved_chunks]
             elif step["action"] == "SEARCH_WEB":
                 web_context = web_search.search(request.question)
@@ -69,18 +73,23 @@ async def ask_endpoint(request: AskRequest):
                 # Defer setting a clarification answer; try to synthesize first in fallback
                 pass
 
-        # Fallback to ensure we return an answer
+        # Fallbacks to ensure an answer, preferring web if local PDF retrieval yielded nothing
         if not answer:
             if not retrieved_chunks:
+                # Try local retrieval with history-aware query
                 try:
-                    retrieved_chunks = retriever.retrieve(request.question, k=5)
+                    retrieved_chunks = retriever.retrieve(request.question, k=5, history=session_memory.history())
                     sources = [c["metadata"]["source"] for c in retrieved_chunks]
                 except Exception:
                     retrieved_chunks = []
-            if retrieved_chunks:
-                answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
-            else:
-                answer = "Please clarify your question for more accurate answers."
+            if not retrieved_chunks:
+                # Fall back to web search if PDFs didn't yield usable context
+                web_context = web_search.search(request.question)
+                retrieved_chunks.append({"content": web_context, "metadata": {"source": "web"}})
+                if "web" not in sources:
+                    sources.append("web")
+            # Synthesize from whatever context we have
+            answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
         session_memory.save_turn(request.question, answer, sources)
         return AskResponse(answer=answer, sources=sources, plan=plan)
     except Exception as e:
