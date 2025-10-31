@@ -1,6 +1,5 @@
 from typing import Dict, Any, List
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
 
 from app.agents.planner import PlannerAgent
 from app.agents.retriever_agent import RetrieverAgent
@@ -92,9 +91,7 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges("search_web", route_edges, {"retrieve": "retrieve", "search_web": "search_web", "reader": "reader"})
     graph.add_edge("reader", END)
 
-    # In-memory checkpointing per session_id to carry state if extended
-    memory = MemorySaver()
-    app = graph.compile(checkpointer=memory)
+    app = graph.compile()
     return app
 
 

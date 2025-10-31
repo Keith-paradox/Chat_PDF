@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
+import json
 from app.agents.planner import PlannerAgent
 from app.agents.retriever_agent import RetrieverAgent
 from app.agents.reader_agent import ReaderAgent
@@ -32,18 +33,38 @@ async def ask_endpoint(request: AskRequest):
         plan = planner.plan(request.question, session_memory)
         logger.info(f"Plan: {plan}")
 
+        # Normalize plan to a list[dict] with action/args
+        normalized_plan = []
+        if isinstance(plan, dict):
+            plan = [plan]
+        for step in plan or []:
+            if isinstance(step, dict):
+                if "action" in step:
+                    normalized_plan.append(step)
+            elif isinstance(step, str):
+                try:
+                    obj = json.loads(step)
+                    if isinstance(obj, dict) and "action" in obj:
+                        normalized_plan.append(obj)
+                except Exception:
+                    continue
+        plan = normalized_plan
+
         retrieved_chunks = []
         sources = []
         answer = ""
         for step in plan:
             if step["action"] == "RETRIEVE":
-                retrieved_chunks = retriever.retrieve(request.question, k=step["args"].get("k", 5))
+                retrieved_chunks = retriever.retrieve(request.question, k=step.get("args", {}).get("k", 5))
                 sources = [c["metadata"]["source"] for c in retrieved_chunks]
             elif step["action"] == "SEARCH_WEB":
                 web_context = web_search.search(request.question)
                 retrieved_chunks.append({"content": web_context, "metadata": {"source": "web"}})
+                # Track source explicitly so the response indicates origin
+                if "web" not in sources:
+                    sources.append("web")
             elif step["action"] == "ANSWER":
-                answer = reader.synthesize(request.question, retrieved_chunks)
+                answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
             elif step["action"] == "ASK_CLARIFY":
                 # Defer setting a clarification answer; try to synthesize first in fallback
                 pass
@@ -57,7 +78,7 @@ async def ask_endpoint(request: AskRequest):
                 except Exception:
                     retrieved_chunks = []
             if retrieved_chunks:
-                answer = reader.synthesize(request.question, retrieved_chunks)
+                answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
             else:
                 answer = "Please clarify your question for more accurate answers."
         session_memory.save_turn(request.question, answer, sources)
