@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from app.api import qa, memory
+from app.api import qa, memory, upload
 
 app = FastAPI(title="Chat With PDF Backend")
 
 app.include_router(qa.router, prefix="/v1")
 app.include_router(memory.router, prefix="/v1")
+app.include_router(upload.router, prefix="/v1")
 
 @app.get("/health")
 def health():

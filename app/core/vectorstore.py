@@ -38,3 +38,11 @@ class VectorStore:
             embeddings=embeddings,
             metadatas=metadatas
         )
+    
+    def clear_all(self):
+        """Delete all chunks from the collection."""
+        # Get all IDs and delete them
+        results = self.collection.get()
+        if results['ids']:
+            self.collection.delete(ids=results['ids'])
+        return len(results['ids']) if results['ids'] else 0

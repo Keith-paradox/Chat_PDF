@@ -2,8 +2,11 @@ const chatEl = document.getElementById('chat');
 const inputEl = document.getElementById('input');
 const sendBtn = document.getElementById('send');
 const clearBtn = document.getElementById('clearMemory');
+const clearVectorstoreBtn = document.getElementById('clearVectorstore');
 const newChatBtn = document.getElementById('newChat');
 const chatListEl = document.getElementById('chatList');
+const pdfUploadEl = document.getElementById('pdfUpload');
+const uploadStatusEl = document.getElementById('uploadStatus');
 
 function uuid() {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -70,17 +73,19 @@ async function loadHistory() {
   } catch {}
 }
 
-function addMsg(role, text, meta) {
+function addMsg(role, text, meta, isTyping = false) {
   const row = document.createElement('div');
   row.className = `msg ${role}`;
+  const textContent = isTyping ? '<span class="typing-animation">...</span>' : escapeHtml(text);
   row.innerHTML = `
     <div class="avatar">${role === 'me' ? 'You' : 'AI'}</div>
     <div>
-      <div class="bubble">${escapeHtml(text)}</div>
+      <div class="bubble">${textContent}</div>
       ${meta ? `<div class="meta">${meta}</div>` : ''}
     </div>`;
   chatEl.appendChild(row);
   chatEl.scrollTop = chatEl.scrollHeight;
+  return row;
 }
 
 function escapeHtml(str) {
@@ -92,12 +97,20 @@ async function ask(question) {
   setSessionId(session_id);
   addMsg('me', question);
   inputEl.value = '';
+  
+  // Add typing indicator
+  const typingRow = addMsg('bot', '...', null, true);
+  
   try {
     const resp = await fetch('/v1/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, session_id })
     });
+    
+    // Remove typing indicator
+    typingRow.remove();
+    
     if (!resp.ok) {
       const text = await resp.text();
       addMsg('bot', `Error ${resp.status}: ${text}`);
@@ -114,6 +127,7 @@ async function ask(question) {
     if (!has) upsertChatTitle(session_id, question.slice(0, 60));
     else upsertChatTitle(session_id, has.title || question.slice(0, 60));
   } catch (e) {
+    typingRow.remove();
     addMsg('bot', `Request failed: ${e}`);
   }
 }
@@ -137,6 +151,26 @@ async function clearMemory() {
   }
 }
 
+async function clearVectorstore() {
+  if (!confirm('Are you sure you want to clear all ingested PDFs? This action cannot be undone.')) {
+    return;
+  }
+  try {
+    const resp = await fetch('/v1/clear_vectorstore', {
+      method: 'POST'
+    });
+    if (!resp.ok) {
+      const text = await resp.text();
+      addMsg('bot', `Clear failed: ${resp.status} ${text}`);
+      return;
+    }
+    const data = await resp.json();
+    addMsg('bot', data.message || `Successfully cleared ${data.deleted_chunks || 0} chunks from vector store.`);
+  } catch (e) {
+    addMsg('bot', `Request failed: ${e}`);
+  }
+}
+
 sendBtn.addEventListener('click', () => {
   const q = inputEl.value.trim();
   if (q) ask(q);
@@ -145,7 +179,77 @@ inputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const q = inputEl.value.trim(); if (q) ask(q); }
 });
 clearBtn.addEventListener('click', clearMemory);
+clearVectorstoreBtn.addEventListener('click', clearVectorstore);
 newChatBtn.addEventListener('click', () => { const id = uuid(); setSessionId(id); upsertChatTitle(id, 'New chat'); chatEl.innerHTML=''; });
+
+// PDF upload handler
+pdfUploadEl.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  
+  uploadStatusEl.textContent = files.length === 1 ? 'Uploading...' : `Uploading ${files.length} files...`;
+  uploadStatusEl.style.color = '#3b82f6';
+  
+  const formData = new FormData();
+  files.forEach(file => formData.append('files', file));
+  
+  try {
+    const resp = await fetch('/v1/upload', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(text);
+    }
+    
+    const data = await resp.json();
+    const summary = data.summary;
+    
+    if (summary.successful === files.length) {
+      uploadStatusEl.textContent = `✓ ${summary.successful} file(s), ${summary.total_chunks_ingested} chunks`;
+      uploadStatusEl.style.color = '#10b981';
+    } else if (summary.successful > 0) {
+      uploadStatusEl.textContent = `⚠ ${summary.successful}/${summary.total_files} succeeded`;
+      uploadStatusEl.style.color = '#f59e0b';
+    } else {
+      uploadStatusEl.textContent = '✗ All uploads failed';
+      uploadStatusEl.style.color = '#ef4444';
+    }
+    
+    // Show detailed results in chat
+    if (summary.successful > 0) {
+      const successMsgs = data.results.filter(r => r.status === 'success')
+        .map(r => `• ${r.filename}: ${r.chunks_ingested} chunks`)
+        .join('\n');
+      addMsg('bot', `Successfully uploaded ${summary.successful} PDF(s):\n${successMsgs}`);
+    }
+    
+    if (summary.failed > 0) {
+      const errorMsgs = data.results.filter(r => r.status === 'error')
+        .map(r => `• ${r.filename}: ${r.message}`)
+        .join('\n');
+      addMsg('bot', `Failed to upload ${summary.failed} file(s):\n${errorMsgs}`);
+    }
+    
+    // Clear file input
+    e.target.value = '';
+    
+    // Clear status after 5 seconds
+    setTimeout(() => {
+      uploadStatusEl.textContent = '';
+    }, 5000);
+  } catch (e) {
+    uploadStatusEl.textContent = '✗ Upload failed';
+    uploadStatusEl.style.color = '#ef4444';
+    addMsg('bot', `Upload failed: ${e.message}`);
+    
+    setTimeout(() => {
+      uploadStatusEl.textContent = '';
+    }, 5000);
+  }
+});
 
 // init
 setSessionId(getSessionId());

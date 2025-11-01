@@ -91,7 +91,10 @@ The system uses a multi-agent architecture where each agent has a specific respo
 - **Intelligent Routing**: LLM-based planner autonomously decides between PDF retrieval and web search
 - **Session Memory**: Maintains conversation context using Redis
 - **Hybrid Search**: Seamlessly combines local PDF knowledge with real-time web information
-- **Web UI**: ChatGPT-like interface with chat history sidebar
+- **Automatic Web Fallback**: If PDF retrieval fails or lacks information, automatically searches the web
+- **Web UI**: ChatGPT-like interface with chat history sidebar and PDF upload
+- **Multi-PDF Upload**: Upload and ingest multiple PDFs simultaneously via web interface
+- **Conversation Management**: Create new chats, switch between conversations, and clear session memory
 - **RESTful API**: Full API access for integration
 
 ## How to Run Locally Using Docker Compose
@@ -144,8 +147,16 @@ The system uses a multi-agent architecture where each agent has a specific respo
 
 ### Ingest PDFs
 
-Once the containers are running, ingest your PDFs:
+There are two ways to ingest PDFs:
 
+#### 1. **Via Web UI (Recommended)**
+Once the containers are running:
+1. Open http://localhost:8000/ in your browser
+2. Click "Upload PDFs" in the sidebar
+3. Select one or more PDF files
+4. Files are automatically uploaded, ingested, and ready for querying
+
+#### 2. **Via Command Line**
 ```bash
 # Ingest a single PDF
 docker-compose exec app python -m app.ingest.ingest_pdfs /app/pdfs/your-file.pdf --doc-id my_document
@@ -183,14 +194,16 @@ Key configurations:
 ```
 ChatPDF/
 ├── app/
-│   ├── agents/          # Multi-agent system
-│   ├── api/             # FastAPI routes
-│   ├── core/            # Core components (vectorstore, embeddings, etc.)
+│   ├── agents/          # Multi-agent system (Planner, Retriever, Reader, WebSearch)
+│   ├── api/             # FastAPI routes (qa, memory, upload)
+│   ├── core/            # Core components (vectorstore, embeddings, web_search, etc.)
 │   ├── ingest/          # PDF ingestion scripts
 │   ├── ui/              # Web UI (HTML/CSS/JS)
 │   ├── Dockerfile       # Container definition
 │   └── main.py          # FastAPI app entry point
 ├── data/                # Persistent data (ChromaDB, Redis)
+│   ├── chroma_db/       # Vector store database
+│   └── redis/           # Session memory database
 ├── pdfs/                # PDF files to ingest
 ├── docker-compose.yml   # Orchestration
 ├── requirements.txt     # Python dependencies
@@ -222,6 +235,39 @@ Response:
 }
 ```
 
+### Upload PDF Files
+
+```bash
+curl -X POST http://localhost:8000/v1/upload \
+  -F "files=@document1.pdf" \
+  -F "files=@document2.pdf"
+```
+
+Response:
+```json
+{
+  "status": "completed",
+  "results": [
+    {"filename": "document1.pdf", "status": "success", "chunks_ingested": 42},
+    {"filename": "document2.pdf", "status": "success", "chunks_ingested": 28}
+  ],
+  "summary": {
+    "total_files": 2,
+    "successful": 2,
+    "failed": 0,
+    "total_chunks_ingested": 70
+  }
+}
+```
+
+### Clear Vector Store
+
+```bash
+curl -X POST http://localhost:8000/v1/clear_vectorstore
+```
+
+Removes all ingested documents from ChromaDB.
+
 ### Clear Session Memory
 
 ```bash
@@ -235,6 +281,8 @@ curl -X POST http://localhost:8000/v1/clear_memory \
 ```bash
 curl "http://localhost:8000/v1/history?session_id=my-session-123"
 ```
+
+Returns all conversation turns for the specified session.
 
 ## Future Improvements
 
@@ -290,10 +338,12 @@ curl "http://localhost:8000/v1/history?session_id=my-session-123"
    - Horizontal scaling with load balancers
 
 10. **Enhanced UI Features**
-    - Document upload via web interface
+    - ✅ Document upload via web interface
     - Chat export (PDF, Markdown)
     - Source citation with page numbers
     - Search within conversations
+    - Markdown rendering in answers
+    - Drag-and-drop file upload
 
 11. **Advanced RAG Techniques**
     - Query expansion and rewriting

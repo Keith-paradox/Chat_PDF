@@ -90,6 +90,20 @@ async def ask_endpoint(request: AskRequest):
                     sources.append("web")
             # Synthesize from whatever context we have
             answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
+        
+        # Final check: if answer indicates lack of info and we haven't searched web yet, do it now
+        if answer and any(phrase in answer.lower() for phrase in ["cannot", "don't have", "does not contain", "sorry", "unable to", "no information", "not provided"]) and "web" not in sources:
+            logger.info("Answer indicates lack of information, attempting web search")
+            try:
+                web_context = web_search.search(request.question)
+                retrieved_chunks = [{"content": web_context, "metadata": {"source": "web"}}]
+                sources = ["web"]
+                answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
+                # Update plan to reflect web search was used
+                plan = [{"action": "RETRIEVE", "args": {"k": 5}}, {"action": "SEARCH_WEB"}, {"action": "ANSWER"}]
+            except Exception as e:
+                logger.exception("Web search fallback failed")
+        
         session_memory.save_turn(request.question, answer, sources)
         return AskResponse(answer=answer, sources=sources, plan=plan)
     except Exception as e:

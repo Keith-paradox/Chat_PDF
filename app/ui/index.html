@@ -13,6 +13,13 @@
           <h2>Chats</h2>
           <button id="newChat">+ New chat</button>
         </div>
+        <div class="upload-section">
+          <label for="pdfUpload" class="upload-label">
+            Upload PDFs
+            <input type="file" id="pdfUpload" accept=".pdf" multiple style="display: none;" />
+          </label>
+          <div id="uploadStatus" class="upload-status"></div>
+        </div>
         <div id="chatList" class="chat-list"></div>
       </aside>
       <section class="main">
@@ -20,6 +27,7 @@
           <h1>ChatPDF</h1>
           <div class="controls">
             <button id="clearMemory">Clear Memory</button>
+            <button id="clearVectorstore">Clear All PDFs</button>
           </div>
         </header>
         <main id="chat"></main>

@@ -12,7 +12,8 @@ class ReaderAgent:
         prompt = (
             f"You are a knowledgeable assistant. Use ONLY the provided context (from local PDFs and/or web snippets) to answer.\n"
             f"If web snippets are present, treat them as the most recent source for time-sensitive questions and cite them.\n"
-            f"Prefer quoting or paraphrasing web snippets including dates and URLs when available. Do not claim you cannot browse.\n\n"
+            f"Prefer quoting or paraphrasing web snippets including dates and URLs when available. Do not claim you cannot browse or lack information.\n"
+            f"You MUST provide a helpful answer based on the provided context, even if it's partial or from web sources only.\n\n"
             f"Current Datetime: {now_iso}\n\n"
             f"Conversation History (may be empty):\n{history_text}\n\n"
             f"User Question: {user_query}\n"
