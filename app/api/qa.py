@@ -2,11 +2,9 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 import json
-from app.agents.planner import PlannerAgent
-from app.agents.retriever_agent import RetrieverAgent
-from app.agents.reader_agent import ReaderAgent
-from app.agents.web_search_agent import WebSearchAgent
+from app.core.graph import build_graph
 from app.core.session_memory import SessionMemory
+from app.agents.retriever_agent import RetrieverAgent
 import logging
 
 router = APIRouter()
@@ -21,90 +19,54 @@ class AskResponse(BaseModel):
     sources: List[str]
     plan: List[Dict[str, Any]]
 
+# Build graph once at module level
+_graph = None
+
+def get_graph():
+    global _graph
+    if _graph is None:
+        _graph = build_graph()
+    return _graph
+
 @router.post("/ask", response_model=AskResponse)
 async def ask_endpoint(request: AskRequest):
     try:
         session_memory = SessionMemory(request.session_id)
-        planner = PlannerAgent()
-        retriever = RetrieverAgent()
-        reader = ReaderAgent()
-        web_search = WebSearchAgent()
-
-        plan = planner.plan(request.question, session_memory)
-        logger.info(f"Plan: {plan}")
-
-        # Normalize plan to a list[dict] with action/args
-        normalized_plan = []
-        if isinstance(plan, dict):
-            plan = [plan]
-        for step in plan or []:
-            if isinstance(step, dict):
-                if "action" in step:
-                    normalized_plan.append(step)
-            elif isinstance(step, str):
-                try:
-                    obj = json.loads(step)
-                    if isinstance(obj, dict) and "action" in obj:
-                        normalized_plan.append(obj)
-                except Exception:
-                    continue
-        plan = normalized_plan
-
-        retrieved_chunks = []
-        sources = []
-        answer = ""
-        for step in plan:
-            if step["action"] == "RETRIEVE":
-                retrieved_chunks = retriever.retrieve(
-                    request.question,
-                    k=step.get("args", {}).get("k", 5),
-                    history=session_memory.history(),
-                )
-                sources = [c["metadata"]["source"] for c in retrieved_chunks]
-            elif step["action"] == "SEARCH_WEB":
-                web_context = web_search.search(request.question)
-                retrieved_chunks.append({"content": web_context, "metadata": {"source": "web"}})
-                # Track source explicitly so the response indicates origin
-                if "web" not in sources:
-                    sources.append("web")
-            elif step["action"] == "ANSWER":
-                answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
-            elif step["action"] == "ASK_CLARIFY":
-                # Defer setting a clarification answer; try to synthesize first in fallback
-                pass
-
-        # Fallbacks to ensure an answer, preferring web if local PDF retrieval yielded nothing
+        graph = get_graph()
+        
+        # Initialize state
+        initial_state = {
+            "question": request.question,
+            "session_id": request.session_id,
+            "plan": [],
+            "contexts": [],
+            "sources": [],
+            "answer": "",
+            "_needs_web_fallback": False,
+            "_retrieval_empty": False
+        }
+        
+        # Run the graph
+        logger.info(f"Running graph for question: {request.question}")
+        final_state = graph.invoke(initial_state)
+        
+        # Extract results
+        answer = final_state.get("answer", "")
+        sources = final_state.get("sources", [])
+        plan = final_state.get("plan", [])
+        
+        # Ensure we have a plan (fallback to default if empty)
+        if not plan:
+            plan = [{"action": "RETRIEVE", "args": {"k": 5}}, {"action": "ANSWER"}]
+        
+        # Ensure we have an answer
         if not answer:
-            if not retrieved_chunks:
-                # Try local retrieval with history-aware query
-                try:
-                    retrieved_chunks = retriever.retrieve(request.question, k=5, history=session_memory.history())
-                    sources = [c["metadata"]["source"] for c in retrieved_chunks]
-                except Exception:
-                    retrieved_chunks = []
-            if not retrieved_chunks:
-                # Fall back to web search if PDFs didn't yield usable context
-                web_context = web_search.search(request.question)
-                retrieved_chunks.append({"content": web_context, "metadata": {"source": "web"}})
-                if "web" not in sources:
-                    sources.append("web")
-            # Synthesize from whatever context we have
-            answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
+            answer = "I apologize, but I was unable to generate a response."
         
-        # Final check: if answer indicates lack of info and we haven't searched web yet, do it now
-        if answer and any(phrase in answer.lower() for phrase in ["cannot", "don't have", "does not contain", "sorry", "unable to", "no information", "not provided"]) and "web" not in sources:
-            logger.info("Answer indicates lack of information, attempting web search")
-            try:
-                web_context = web_search.search(request.question)
-                retrieved_chunks = [{"content": web_context, "metadata": {"source": "web"}}]
-                sources = ["web"]
-                answer = reader.synthesize(request.question, retrieved_chunks, session_memory.history())
-                # Update plan to reflect web search was used
-                plan = [{"action": "RETRIEVE", "args": {"k": 5}}, {"action": "SEARCH_WEB"}, {"action": "ANSWER"}]
-            except Exception as e:
-                logger.exception("Web search fallback failed")
-        
+        # Save to session memory
         session_memory.save_turn(request.question, answer, sources)
+        
+        logger.info(f"Answer generated, sources: {sources}, plan: {plan}")
         return AskResponse(answer=answer, sources=sources, plan=plan)
     except Exception as e:
         logger.exception("QA endpoint error")

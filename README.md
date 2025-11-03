@@ -114,13 +114,7 @@ The system uses a multi-agent architecture where each agent has a specific respo
    cd ChatPDF
    ```
 
-2. **Create environment file**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your API keys
-   ```
-
-3. **Configure environment variables**
+2. **Configure environment variables**
    
    Create a `.env` file in the project root with:
    ```env
@@ -130,7 +124,7 @@ The system uses a multi-agent architecture where each agent has a specific respo
    SEARCHAPI_API_KEY=your_searchapi_key
    ```
 
-4. **Build and start services**
+3. **Build and start services**
    ```bash
    docker-compose up --build
    ```
@@ -140,7 +134,7 @@ The system uses a multi-agent architecture where each agent has a specific respo
    - Start Redis for session memory
    - Mount volumes for PDFs, data persistence, and live code reload
 
-5. **Access the application**
+4. **Access the application**
    - Web UI: http://localhost:8000/
    - API Docs: http://localhost:8000/docs
    - Health Check: http://localhost:8000/health
