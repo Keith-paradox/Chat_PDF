@@ -76,7 +76,7 @@ async function loadHistory() {
 function addMsg(role, text, meta, isTyping = false) {
   const row = document.createElement('div');
   row.className = `msg ${role}`;
-  const textContent = isTyping ? '<span class="typing-animation">Generating answer</span>' : escapeHtml(text);
+  const textContent = isTyping ? 'Generating answer<span class="typing-dots">...</span>' : escapeHtml(text);
   row.innerHTML = `
     <div class="avatar">${role === 'me' ? 'You' : 'AI'}</div>
     <div>
