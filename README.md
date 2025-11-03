@@ -286,90 +286,26 @@ Returns all conversation turns for the specified session.
 
 ## Future Improvements
 
-### Short-term Enhancements
-
-1. **LangGraph Integration**
-   - Refactor to use LangGraph for more robust state management
-   - Implement proper checkpointing and state persistence
-   - Enable more complex agent workflows and loops
-
-2. **Enhanced Retrieval**
-   - Implement re-ranking for better chunk selection
-   - Add hybrid search (keyword + semantic)
-   - Support multi-modal retrieval (images, tables)
-
-3. **Streaming Responses**
-   - Implement Server-Sent Events (SSE) for streaming answers
-   - Real-time UI updates as the LLM generates responses
-   - Improved user experience with progressive loading
-
-4. **Better Web Search Integration**
-   - Cache frequently searched queries
-   - Support multiple search engines as fallback
-   - Extract and summarize multiple sources
-
-### Medium-term Improvements
-
-5. **Advanced Memory Management**
-   - Summarize long conversation histories
-   - Implement memory compression techniques
-   - Support cross-session knowledge transfer
-
-6. **Multi-User Support**
-   - Authentication and authorization
-   - User-specific document collections
-   - Sharing and collaboration features
-
-7. **Vector Store Options**
-   - Support for Pinecone, Milvus, Weaviate
-   - Easy switching between vector databases
-   - Optimized for production scale
-
-8. **Evaluation & Monitoring**
-   - Add evaluation metrics (retrieval accuracy, answer quality)
-   - Implement logging and monitoring dashboards
-   - Track API usage and performance
-
-### Long-term Vision
-
-9. **Production Hardening**
-   - Rate limiting and request queuing
-   - Error handling and retry mechanisms
-   - Horizontal scaling with load balancers
-
-10. **Enhanced UI Features**
-    - ✅ Document upload via web interface
-    - Chat export (PDF, Markdown)
-    - Source citation with page numbers
-    - Search within conversations
-    - Markdown rendering in answers
-    - Drag-and-drop file upload
-
-11. **Advanced RAG Techniques**
-    - Query expansion and rewriting
-    - Self-query retrieval for complex questions
-    - Graph-based knowledge extraction
-
-12. **Multi-language Support**
-    - Automatic language detection
-    - Support for non-English PDFs
-    - Cross-language retrieval
+- Authentication
+- Advanced memory management (summarize long conversation histories, support cross-session knowledge transfer)
+- Multi-language support
+- Source citation with page numbers
+- Search within conversations
+- Rate limiting and request queuing
+- Error handling and retry mechanisms
+- Track API usage and performance
+- Optimized for production scale
+- Better Web Search Integration
+- Real-time UI updates as the LLM generates responses
+- Enable more complex agent workflows and loops
 
 ## Technology Stack
 
 - **Backend**: FastAPI (Python 3.11)
-- **LLM**: OpenRouter API (supports multiple models)
+- **LLM**: OpenRouter API (Google Gemini 2.5 Flash Lite)
 - **Vector Store**: ChromaDB
 - **Embeddings**: Sentence-Transformers (all-MiniLM-L6-v2)
 - **Web Search**: SearchAPI.io (Google engine)
 - **Session Memory**: Redis
 - **PDF Processing**: PyMuPDF (fitz)
 - **Containerization**: Docker & Docker Compose
-
-## License
-
-[Specify your license]
-
-## Contributing
-
-[Contributing guidelines if applicable]
