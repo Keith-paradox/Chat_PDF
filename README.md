@@ -1,10 +1,12 @@
 # ChatPDF
 
-A Retrieval-Augmented Generation (RAG) system for querying PDF documents using multi-agent architecture. The system intelligently decides when to search locally stored PDFs or fetch information from the web, providing contextually aware answers with session-based memory.
+A Retrieval-Augmented Generation (RAG) system for querying PDF documents using multi-agent architecture powered by **LangGraph**. The system intelligently decides when to search locally stored PDFs or fetch information from the web, providing contextually aware answers with session-based memory.
 
 ## How It Works
 
 ### Architecture Overview
+
+The system uses **LangGraph** to orchestrate a stateful multi-agent workflow that dynamically routes between agents based on the question and intermediate results.
 
 ```mermaid
 flowchart TD
@@ -19,18 +21,24 @@ flowchart TD
         EMBED --> CHROMA[ChromaDB<br/>Vector Store]
     end
     
-    subgraph "Question Answering Pipeline"
+    subgraph "LangGraph Orchestration"
         UI --> Q[User Question]
-        Q --> PLAN[PlannerAgent]
-        PLAN -->|Plan| RETRIEVE[RetrieverAgent]
-        PLAN -->|Plan| WEB[WebSearchAgent]
-        PLAN -->|Plan| CLARIFY[Clarification]
+        Q --> LG[LangGraph StateGraph]
+        LG --> PLAN[PlannerAgent Node]
+        PLAN -->|Conditional Edges| ROUTE{Routing Logic}
+        ROUTE -->|RETRIEVE| RETRIEVE[RetrieverAgent Node]
+        ROUTE -->|SEARCH_WEB| WEB[WebSearchAgent Node]
+        ROUTE -->|ANSWER| READER[ReaderAgent Node]
+        ROUTE -->|ASK_CLARIFY| CLARIFY[Clarification]
         
-        RETRIEVE --> CHROMA
-        CHROMA -->|Chunks| READER[ReaderAgent]
-        WEB -->|Web Results| READER
+        RETRIEVE -->|Empty Results| WEB
+        RETRIEVE -->|Has Results| READER
+        WEB --> READER
+        READER -->|Needs Web Info| FALLBACK[Web Fallback Node]
+        FALLBACK --> READER
+        READER -->|Complete| END[END]
         CLARIFY --> ANSWER[Answer]
-        READER --> ANSWER
+        END --> ANSWER
         ANSWER --> UI
     end
     
@@ -42,6 +50,31 @@ flowchart TD
     end
     
 ```
+
+### LangGraph Workflow
+
+The system uses **LangGraph** (`StateGraph`) to orchestrate the multi-agent workflow. The graph maintains state throughout the execution, allowing for dynamic routing and conditional execution based on:
+
+- **Planner decisions**: LLM-generated action plans determine the initial route
+- **Retrieval results**: Empty results automatically trigger web search
+- **Answer quality**: If the answer indicates lack of information, automatic web fallback is triggered
+- **Plan consumption**: Actions are consumed from the plan as they execute, enabling multi-step workflows
+
+**Graph Nodes:**
+- `planner`: Entry point that generates the action plan
+- `retrieve`: Semantic search over PDF chunks
+- `search_web`: Real-time web search
+- `reader`: Synthesizes final answer from contexts
+- `web_fallback`: Fallback web search when answer lacks information
+
+**Conditional Routing:**
+- Planner → routes based on generated plan (RETRIEVE, SEARCH_WEB, ANSWER, ASK_CLARIFY)
+- Retrieve → checks if results are empty, routes to web search or continues with plan
+- Web Search → continues with plan or triggers fallback if needed
+- Reader → ends if answer is complete, or triggers web fallback if information is missing
+- Web Fallback → always routes back to reader for final synthesis
+
+This stateful graph architecture enables complex, adaptive workflows that respond dynamically to the query and intermediate results.
 
 ### Agent Descriptions
 
@@ -88,10 +121,13 @@ The system uses a multi-agent architecture where each agent has a specific respo
 
 ### Key Features
 
+- **LangGraph Orchestration**: Stateful multi-agent workflow with dynamic conditional routing
 - **Intelligent Routing**: LLM-based planner autonomously decides between PDF retrieval and web search
+- **Adaptive Workflows**: Graph automatically adjusts execution path based on intermediate results
 - **Session Memory**: Maintains conversation context using Redis
 - **Hybrid Search**: Seamlessly combines local PDF knowledge with real-time web information
 - **Automatic Web Fallback**: If PDF retrieval fails or lacks information, automatically searches the web
+- **State Management**: Graph state persists through all nodes, enabling complex multi-step workflows
 - **Web UI**: ChatGPT-like interface with chat history sidebar and PDF upload
 - **Multi-PDF Upload**: Upload and ingest multiple PDFs simultaneously via web interface
 - **Conversation Management**: Create new chats, switch between conversations, and clear session memory
@@ -190,7 +226,13 @@ ChatPDF/
 ├── app/
 │   ├── agents/          # Multi-agent system (Planner, Retriever, Reader, WebSearch)
 │   ├── api/             # FastAPI routes (qa, memory, upload)
-│   ├── core/            # Core components (vectorstore, embeddings, web_search, etc.)
+│   ├── core/            # Core components
+│   │   ├── graph.py     # LangGraph orchestration (StateGraph definition)
+│   │   ├── vectorstore.py
+│   │   ├── embeddings.py
+│   │   ├── web_search.py
+│   │   ├── llm_client.py
+│   │   └── session_memory.py
 │   ├── ingest/          # PDF ingestion scripts
 │   ├── ui/              # Web UI (HTML/CSS/JS)
 │   ├── Dockerfile       # Container definition
@@ -291,11 +333,12 @@ Returns all conversation turns for the specified session.
 - Optimized for production scale
 - Better Web Search Integration
 - Real-time UI updates as the LLM generates responses
-- Enable more complex agent workflows and loops
+- Enhanced LangGraph workflows (parallel agent execution, human-in-the-loop nodes, checkpoints for long-running tasks)
 
 ## Technology Stack
 
 - **Backend**: FastAPI (Python 3.11)
+- **Workflow Orchestration**: LangGraph (StateGraph for multi-agent coordination)
 - **LLM**: OpenRouter API (Google Gemini 2.5 Flash Lite)
 - **Vector Store**: ChromaDB
 - **Embeddings**: Sentence-Transformers (all-MiniLM-L6-v2)

@@ -1,7 +1,6 @@
 import argparse
 import os
 import fitz
-import numpy as np
 from app.core.embeddings import get_model
 from app.core.vectorstore import get_vectorstore
 

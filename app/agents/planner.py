@@ -26,7 +26,7 @@ class PlannerAgent:
             "4) Q: Tell me more.\n   Plan: [{\"action\": \"ASK_CLARIFY\", \"args\": {\"question\": \"Please specify the topic.\"}}]\n\n"
             f"Question: {user_query}\n"
         )
-        result = llm_completion(prompt, json_mode=True)
+        result = llm_completion(prompt)
         try:
             plan = json.loads(result)
         except Exception:

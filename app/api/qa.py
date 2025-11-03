@@ -1,10 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any
-import json
 from app.core.graph import build_graph
 from app.core.session_memory import SessionMemory
-from app.agents.retriever_agent import RetrieverAgent
 import logging
 
 router = APIRouter()
@@ -70,18 +68,4 @@ async def ask_endpoint(request: AskRequest):
         return AskResponse(answer=answer, sources=sources, plan=plan)
     except Exception as e:
         logger.exception("QA endpoint error")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/debug/retrieve")
-async def debug_retrieve(q: str, k: int = 5):
-    try:
-        retriever = RetrieverAgent()
-        results = retriever.retrieve(q, k)
-        return {
-            "num_results": len(results),
-            "sources": [r["metadata"]["source"] for r in results],
-            "previews": [r["content"][:200] for r in results],
-        }
-    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

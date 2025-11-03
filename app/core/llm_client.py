@@ -1,10 +1,9 @@
 import httpx
-import os
 from app.config import settings
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-def llm_completion(prompt: str, model=None, json_mode=False):
+def llm_completion(prompt: str, model=None):
     messages = [{"role": "system", "content": prompt}]
     payload = {
         "model": model or settings.openrouter_model,

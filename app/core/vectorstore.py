@@ -1,6 +1,4 @@
 import chromadb
-from chromadb.config import Settings as ChromaSettings
-import os
 from app.config import settings
 
 def get_vectorstore():
